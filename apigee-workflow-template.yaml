@@ -99,7 +99,7 @@ spec:
             echo "--- 2. Deploying from {{inputs.parameters.path}} ---"
             mvn clean install -P{{inputs.parameters.apigee_env}} \
               -Dtoken="$TOKEN" \
-              -Dapigee.options=update \
+              -Dapigee.options=override \
               -Dapigee.config.options=none \
               -DskipTests=true
         volumeMounts:
