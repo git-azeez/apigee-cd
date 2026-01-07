@@ -1,0 +1,79 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate  # <--- CHANGED from 'Workflow'
+metadata:
+  name: apigee-proxy-deployer # <--- This matches the name in your command
+  namespace: argo
+spec:
+  serviceAccountName: argo-workflow
+  
+  # Define parameters without default values (forces user to provide them)
+  arguments:
+    parameters:
+      - name: repo_url
+      - name: repo_branch
+        value: "main"
+      - name: proxy_path
+      - name: apigee_env     # Added this parameter for flexibility
+        value: "walmart"
+
+  entrypoint: main
+
+  templates:
+  - name: main
+    inputs:
+      parameters:
+        - name: repo_url
+        - name: repo_branch
+        - name: proxy_path
+        - name: apigee_env
+    dag:
+      tasks:
+      - name: deploy-proxy
+        template: maven-build-step
+        arguments:
+          parameters:
+            - name: repo_url
+              value: "{{inputs.parameters.repo_url}}"
+            - name: repo_branch
+              value: "{{inputs.parameters.repo_branch}}"
+            - name: proxy_path
+              value: "{{inputs.parameters.proxy_path}}"
+            - name: apigee_env
+              value: "{{inputs.parameters.apigee_env}}"
+
+  - name: maven-build-step
+    inputs:
+      parameters:
+        - name: repo_url
+        - name: repo_branch
+        - name: proxy_path
+        - name: apigee_env
+      artifacts:
+        - name: source-code
+          path: /src
+          git:
+            repo: "{{inputs.parameters.repo_url}}"
+            revision: "{{inputs.parameters.repo-branch}}"
+
+    container:
+      image: maven:3.9.6-eclipse-temurin-17
+      workingDir: /src/{{inputs.parameters.proxy_path}}
+      
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          echo "--- Setup: Installing gcloud ---"
+          apt-get update -qq && apt-get install -y -qq apt-transport-https ca-certificates gnupg curl > /dev/null
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
+          apt-get update -qq && apt-get install -y -qq google-cloud-cli > /dev/null
+
+          echo "--- Auth: Generating Token ---"
+          export TOKEN=$(gcloud auth print-access-token)
+          
+          echo "--- Build: Deploying to {{inputs.parameters.apigee_env}} ---"
+          # We pass the env parameter into the maven command
+          mvn clean install \
+            -Dbearer="$TOKEN" \
+            -Dapigee.env="{{inputs.parameters.apigee_env}}" \
+            -Dapigee.options=override
