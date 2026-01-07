@@ -1,0 +1,29 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.gitazeez.apigee</groupId>
+    <artifactId>parent-pom</artifactId>
+    <version>1.0.0</version>
+    <relativePath>../parent-pom/pom.xml</relativePath>
+  </parent>
+
+  <groupId>com.gitazeez.apigee</groupId>
+  <artifactId>hello-world-mock</artifactId>
+  <version>1.0.0</version>
+  <packaging>pom</packaging>
+
+  <name>hello-world-mock</name>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>io.apigee.build-tools.enterprise4g</groupId>
+        <artifactId>apigee-edge-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>

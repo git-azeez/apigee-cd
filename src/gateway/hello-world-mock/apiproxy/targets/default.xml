@@ -1,0 +1,6 @@
+<TargetEndpoint name="default">
+  <Description>Mocktarget backend</Description>
+  <HTTPTargetConnection>
+    <URL>https://mocktarget.apigee.net</URL>
+  </HTTPTargetConnection>
+</TargetEndpoint>

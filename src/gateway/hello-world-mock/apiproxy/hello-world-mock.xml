@@ -1,0 +1,9 @@
+<APIProxy name="hello-world-mock" revision="1">
+  <Description>Simple mocktarget proxy for Apigee hybrid</Description>
+  <TargetEndpoints>
+    <TargetEndpoint>default</TargetEndpoint>
+  </TargetEndpoints>
+  <ProxyEndpoints>
+    <ProxyEndpoint>default</ProxyEndpoint>
+  </ProxyEndpoints>
+</APIProxy>

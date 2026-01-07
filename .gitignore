@@ -1,0 +1,13 @@
+# Ignore Maven build directory
+target/
+*.jar
+*.war
+*.zip
+*.ear
+*.log
+
+# Ignore IDE files (optional but recommended)
+.idea/
+*.iml
+.vscode/
+.DS_Store

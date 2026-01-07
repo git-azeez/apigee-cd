@@ -1,0 +1,105 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.gitazeez.apigee</groupId>
+    <artifactId>parent-pom</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>apigee-parent-pom</name>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        
+        <apigee.hosturl>https://apigee.googleapis.com</apigee.hosturl>
+        
+        <apigee.apiversion>v1</apigee.apiversion> 
+        
+        <apigee.authtype>oauth</apigee.authtype>
+
+        <apigee.org>apigee-hybrid-eval-1-477813</apigee.org>
+        <apigee.env>walmart</apigee.env>
+        <apigee.options>override</apigee.options>
+        
+        <apigee.bearer>${bearer}</apigee.bearer>
+    </properties>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>io.apigee.build-tools.enterprise4g</groupId>
+                    <artifactId>apigee-edge-maven-plugin</artifactId>
+                    <version>2.5.2</version>
+                    <executions>
+                        <execution>
+                            <id>configure-bundle-step</id>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>configure</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>deploy-bundle-step</id>
+                            <phase>install</phase>
+                            <goals>
+                                <goal>deploy</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                    <configuration>
+                        <org>${apigee.org}</org>
+                        <env>${apigee.env}</env>
+                        <hosturl>${apigee.hosturl}</hosturl>
+                        <apiversion>${apigee.apiversion}</apiversion> <authtype>${apigee.authtype}</authtype>       <bearer>${apigee.bearer}</bearer>
+                        <options>${apigee.options}</options>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-resources</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <overwrite>true</overwrite>
+                            <outputDirectory>${basedir}/target/apiproxy</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>apiproxy</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+    
+    <profiles>
+        <profile>
+            <id>walmart</id>
+            <properties>
+                <apigee.profile>walmart</apigee.profile>
+                <apigee.env>walmart</apigee.env>
+                <apigee.org>apigee-hybrid-eval-1-477813</apigee.org>
+                <apigee.hosturl>https://apigee.googleapis.com</apigee.hosturl>
+                <apigee.apiversion>v1</apigee.apiversion>
+                <apigee.authtype>oauth</apigee.authtype>
+            </properties>
+        </profile>
+    </profiles>
+</project>
