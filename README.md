@@ -192,11 +192,7 @@ The workflow is defined in `apigee-workflow-template.yaml` and executes as a DAG
 
 ---
 
-That is a smart addition. Highlighting a **Declarative Job** section shows that the system is not just a "script runner" but a robust orchestration platform where specific tasks can be defined, versioned, and executed as standard Kubernetes resources for debugging or specialized operational needs.
 
-Add this section to your `README.md` right after the **Declarative Deployment** section:
-
----
 
 
 ```markdown
