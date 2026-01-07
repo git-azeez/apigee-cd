@@ -1,7 +1,7 @@
 <ProxyEndpoint name="default">
   <Description>Default proxy endpoint</Description>
   <HTTPProxyConnection>
-    <BasePath>/hello-world-mock</BasePath>
+    <BasePath>/hello-world-mockk</BasePath>
     <VirtualHost>secure</VirtualHost>
   </HTTPProxyConnection>
   <RouteRule name="default">
