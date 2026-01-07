@@ -1,0 +1,79 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: apigee-hybrid-deploy-
+  namespace: argo
+spec:
+  entrypoint: main
+  
+  UPDATED: Using workload identiy 
+  serviceAccountName: argo-workflow
+
+  arguments:
+    parameters:
+      - name: repo-url
+        value: "https://github.com/git-azeez/apigee-hybrid-mock.git"
+      - name: repo-branch
+        value: "main"
+      - name: proxy-path
+        value: "src/gateway/hello-world-mock"
+
+  templates:
+  - name: main
+    inputs:
+      parameters:
+        - name: repo-url
+        - name: repo-branch
+        - name: proxy-path
+    dag:
+      tasks:
+      - name: deploy-task
+        template: maven-build-deploy
+        arguments:
+          parameters:
+            - name: repo-url
+              value: "{{inputs.parameters.repo-url}}"
+            - name: repo-branch
+              value: "{{inputs.parameters.repo-branch}}"
+            - name: proxy-path
+              value: "{{inputs.parameters.proxy-path}}"
+
+  - name: maven-build-deploy
+    inputs:
+      parameters:
+        - name: repo-url
+        - name: repo-branch
+        - name: proxy-path
+      artifacts:
+        - name: source-code
+          path: /src
+          git:
+            repo: "{{inputs.parameters.repo-url}}"
+            revision: "{{inputs.parameters.repo-branch}}"
+
+    container:
+      # Standard Maven image (we will install gcloud inside for now)
+      image: maven:3.9.6-eclipse-temurin-17
+      workingDir: /src/{{inputs.parameters.proxy-path}}
+      
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          echo "=== 1. Installing gcloud ==="
+          apt-get update -qq && apt-get install -y -qq apt-transport-https ca-certificates gnupg curl > /dev/null
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
+          apt-get update -qq && apt-get install -y -qq google-cloud-cli > /dev/null
+          
+          echo "=== 2. Authenticating via Workload Identity ==="
+          export TOKEN=$(gcloud auth print-access-token)
+          
+          if [ -z "$TOKEN" ]; then
+             echo "ERROR: Token is empty. Workload Identity binding might be missing."
+             exit 1
+          fi
+          
+          echo "=== 3. Deploying to Apigee ==="
+          mvn clean install \
+            -Dbearer="$TOKEN" \
+            -Dapigee.options=override
