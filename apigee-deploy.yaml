@@ -5,6 +5,7 @@ metadata:
   namespace: argo
 spec:
   entrypoint: main
+  # SERVICE ACCOUNT: Required for Workload Identity (Keyless Auth)
   serviceAccountName: argo-workflow
 
   arguments:
@@ -17,6 +18,7 @@ spec:
         value: "src/gateway/hello-world-mock"
 
   templates:
+  # --- Main DAG (Directed Acyclic Graph) ---
   - name: main
     inputs:
       parameters:
@@ -25,8 +27,8 @@ spec:
         - name: proxy-path
     dag:
       tasks:
-      - name: deploy-task
-        template: maven-build-deploy
+      - name: deploy-proxy
+        template: maven-build-step
         arguments:
           parameters:
             - name: repo-url
@@ -36,12 +38,18 @@ spec:
             - name: proxy-path
               value: "{{inputs.parameters.proxy-path}}"
 
-  - name: maven-build-deploy
+  # --- The Build Template ---
+  - name: maven-build-step
     inputs:
       parameters:
         - name: repo-url
         - name: repo-branch
         - name: proxy-path
+      
+      # ---------------------------------------------------------
+      # STEP 1: GIT PULL
+      # Argo automatically clones the repo before the container starts
+      # ---------------------------------------------------------
       artifacts:
         - name: source-code
           path: /src
@@ -49,29 +57,37 @@ spec:
             repo: "{{inputs.parameters.repo-url}}"
             revision: "{{inputs.parameters.repo-branch}}"
 
+    # ---------------------------------------------------------
+    # STEP 2: MAVEN IMAGE
+    # We use the official Maven Docker image to run the logic
+    # ---------------------------------------------------------
     container:
-      # Standard Maven image (we will install gcloud inside for now)
       image: maven:3.9.6-eclipse-temurin-17
       workingDir: /src/{{inputs.parameters.proxy-path}}
       
+      # ---------------------------------------------------------
+      # STEP 3: MAVEN BUILD
+      # We install dependencies and run the build command
+      # ---------------------------------------------------------
       command: ["/bin/bash", "-c"]
       args:
         - |
-          echo "=== 1. Installing gcloud ==="
+          echo "--- [Setup] Installing Google Cloud SDK ---"
+          # (Required because the standard Maven image doesn't have 'gcloud')
           apt-get update -qq && apt-get install -y -qq apt-transport-https ca-certificates gnupg curl > /dev/null
           curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
           echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
           apt-get update -qq && apt-get install -y -qq google-cloud-cli > /dev/null
-          
-          echo "=== 2. Authenticating via Workload Identity ==="
+
+          echo "--- [Auth] Generating Token via Workload Identity ---"
           export TOKEN=$(gcloud auth print-access-token)
           
           if [ -z "$TOKEN" ]; then
-             echo "ERROR: Token is empty. Workload Identity binding might be missing."
+             echo "Error: Failed to generate token. Check K8s Service Account binding."
              exit 1
           fi
-          
-          echo "=== 3. Deploying to Apigee ==="
+
+          echo "--- [Build] Running Maven Deploy ---"
           mvn clean install \
             -Dbearer="$TOKEN" \
             -Dapigee.options=override
