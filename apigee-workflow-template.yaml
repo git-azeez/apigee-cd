@@ -4,81 +4,113 @@ metadata:
   name: apigee-proxy-deployer
   namespace: argo
 spec:
-  serviceAccountName: argo-workflow
-  arguments:
-    parameters:
-      - name: repo_url
-      - name: repo_branch
-        value: "main"
-      - name: proxy_path
-      - name: apigee_env
-        value: "walmart"
-
+  # USES WORKLOAD IDENTITY: KSA 'argo-workflow' must be bound to your GSA
+  serviceAccountName: argo-workflow 
   entrypoint: main
+  
+  # 1. Define the Shared Volume
+  volumeClaimTemplates:
+    - metadata:
+        name: workdir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
 
   templates:
-  - name: main
-    inputs:
-      parameters:
-        - name: repo_url
-        - name: repo_branch
-        - name: proxy_path
-        - name: apigee_env
-    dag:
-      tasks:
-      - name: deploy-proxy
-        template: maven-build-step
-        arguments:
-          parameters:
-            - name: repo_url
-              value: "{{inputs.parameters.repo_url}}"
-            - name: repo_branch
-              value: "{{inputs.parameters.repo_branch}}"
-            - name: proxy_path
-              value: "{{inputs.parameters.proxy_path}}"
-            - name: apigee_env
-              value: "{{inputs.parameters.apigee_env}}"
+    - name: main
+      inputs:
+        parameters:
+          - name: repo_url
+          - name: proxy_name
+          - name: apigee_env
+      dag:
+        tasks:
+          - name: clone-code
+            template: git-clone
+            arguments:
+              parameters:
+                - name: url
+                  value: "{{inputs.parameters.repo_url}}"
 
-  - name: maven-build-step
-    inputs:
-      parameters:
-        - name: repo_url
-        - name: repo_branch
-        - name: proxy_path
-        - name: apigee_env
-      artifacts:
-        - name: source-code
-          path: /src
-          git:
-            repo: "{{inputs.parameters.repo_url}}"
-            revision: "{{inputs.parameters.repo-branch}}"
-            # --- AUTH CONFIGURATION ADDED HERE ---
-            usernameSecret:
-              name: github-creds
-              key: username
-            passwordSecret:
-              name: github-creds
-              key: token
-            # -------------------------------------
+          - name: maven-deploy
+            dependencies: [clone-code]
+            template: apigee-deploy
+            arguments:
+              parameters:
+                - name: apigee_env
+                  value: "{{inputs.parameters.apigee_env}}"
 
-    container:
-      image: maven:3.9.6-eclipse-temurin-17
-      workingDir: /src/{{inputs.parameters.proxy_path}}
-      
-      command: ["/bin/bash", "-c"]
-      args:
-        - |
-          echo "--- Setup: Installing gcloud ---"
-          apt-get update -qq && apt-get install -y -qq apt-transport-https ca-certificates gnupg curl > /dev/null
-          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
-          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list
-          apt-get update -qq && apt-get install -y -qq google-cloud-cli > /dev/null
+    # STEP 1: AUTHENTICATED GIT CLONE
+    - name: git-clone
+      inputs:
+        parameters:
+          - name: url
+      container:
+        image: alpine/git:latest
+        workingDir: /src
+        env:
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: github-creds
+                key: token      # Corrected key name
+          - name: GITHUB_USER
+            valueFrom:
+              secretKeyRef:
+                name: github-creds
+                key: username
+        command: [sh, -c]
+        args: 
+          - |
+            set -e
+            echo "--- Cleaning workspace volume ---"
+            # Delete hidden files too (like .git) to ensure fresh clone
+            rm -rf ./* .[a-zA-Z]* || true
+            
+            echo "--- Cloning repository ---"
+            # Strip https:// protocol if present to avoid duplication
+            REPO_PATH=$(echo "{{inputs.parameters.url}}" | sed 's~https://~~')
+            
+            # Clone into current directory (.)
+            git clone "https://${GITHUB_USER}:${GITHUB_TOKEN}@${REPO_PATH}" .
+        volumeMounts:
+          - name: workdir
+            mountPath: /src
 
-          echo "--- Auth: Generating Token ---"
-          export TOKEN=$(gcloud auth print-access-token)
-          
-          echo "--- Build: Deploying to {{inputs.parameters.apigee_env}} ---"
-          mvn clean install \
-            -Dbearer="$TOKEN" \
-            -Dapigee.env="{{inputs.parameters.apigee_env}}" \
-            -Dapigee.options=override
+    # STEP 2: APIGEE DEPLOYMENT
+    - name: apigee-deploy
+      inputs:
+        parameters:
+          - name: apigee_env
+      container:
+        image: maven:3.8.5-openjdk-11
+        workingDir: /src
+        command: [sh, -c]
+        # FIX: Removed Python dependency. 
+        # Using grep/cut to parse JSON is safer in minimal containers.
+        args:
+          - |
+            set -e
+            
+            echo "--- 1. Fetching Workload Identity Token ---"
+            TOKEN=$(curl -s -H "Metadata-Flavor: Google" \
+              "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" \
+              | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+            if [ -z "$TOKEN" ]; then 
+              echo "Error: Token generation failed. Check Workload Identity setup."
+              exit 1
+            fi
+            echo "Token generated successfully."
+
+            echo "--- 2. Executing Maven Deployment to {{inputs.parameters.apigee_env}} ---"
+            mvn clean install -P{{inputs.parameters.apigee_env}} \
+              -Dtoken="$TOKEN" \
+              -Dapigee.options=update \
+              -Dapigee.config.options=none \
+              -DskipTests=true
+        volumeMounts:
+          - name: workdir
+            mountPath: /src
