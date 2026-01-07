@@ -172,4 +172,6 @@ The workflow is defined in `apigee-workflow-template.yaml` and executes as a DAG
 * Generates a Google Cloud Access Token using Workload Identity metadata.
 * Executes `mvn clean install` to deploy the bundle to Apigee.
 
+---
+Reference : https://github.com/apigee/apigee-deploy-maven-plugin
 
