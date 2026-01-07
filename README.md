@@ -140,7 +140,7 @@ Run the following command to deploy a proxy. Replace the parameters as needed.
 
 ```bash
 argo submit --from wftmpl/apigee-proxy-deployer \
-  -p repo_url="[https://github.com/git-azeez/apigee-hybrid-mock.git](https://github.com/git-azeez/apigee-hybrid-mock.git)" \
+  -p repo_url="https://github.com/git-azeez/apigee-hybrid-mock.git" \
   -p proxy_path="src/gateway/hello-world-mock" \
   -p apigee_env="walmart" \
   --namespace argo \
