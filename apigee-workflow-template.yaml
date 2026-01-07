@@ -1,19 +1,17 @@
 apiVersion: argoproj.io/v1alpha1
-kind: WorkflowTemplate  # <--- CHANGED from 'Workflow'
+kind: WorkflowTemplate
 metadata:
-  name: apigee-proxy-deployer # <--- This matches the name in your command
+  name: apigee-proxy-deployer
   namespace: argo
 spec:
   serviceAccountName: argo-workflow
-  
-  # Define parameters without default values (forces user to provide them)
   arguments:
     parameters:
       - name: repo_url
       - name: repo_branch
         value: "main"
       - name: proxy_path
-      - name: apigee_env     # Added this parameter for flexibility
+      - name: apigee_env
         value: "walmart"
 
   entrypoint: main
@@ -54,6 +52,14 @@ spec:
           git:
             repo: "{{inputs.parameters.repo_url}}"
             revision: "{{inputs.parameters.repo-branch}}"
+            # --- AUTH CONFIGURATION ADDED HERE ---
+            usernameSecret:
+              name: github-creds
+              key: username
+            passwordSecret:
+              name: github-creds
+              key: password
+            # -------------------------------------
 
     container:
       image: maven:3.9.6-eclipse-temurin-17
@@ -72,7 +78,6 @@ spec:
           export TOKEN=$(gcloud auth print-access-token)
           
           echo "--- Build: Deploying to {{inputs.parameters.apigee_env}} ---"
-          # We pass the env parameter into the maven command
           mvn clean install \
             -Dbearer="$TOKEN" \
             -Dapigee.env="{{inputs.parameters.apigee_env}}" \
